@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Photo Booth</title>
+<style>
+:root{--bg:#f6f5f2;--fg:#1d1d1d;--card:#fff;--line:#d9d6cf}
+@media (prefers-color-scheme:dark){:root{--bg:#171717;--fg:#eee;--card:#222;--line:#3a3a3a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;padding:16px}
+.wrap{max-width:560px;margin:0 auto}h1{font-size:18px;margin:4px 0 12px}
+canvas{width:100%;max-height:70vh;object-fit:contain;border:1px solid var(--line);border-radius:12px;display:block;margin:0 auto;background:conic-gradient(#ccc 25%,#fff 0 50%,#ccc 0 75%,#fff 0) 0 0/20px 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px}
+label{display:block;font-size:13px;margin-bottom:10px}input,select{display:block;width:100%;margin-top:4px;font-size:15px}
+input[type=text],select{padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
+.row{display:flex;gap:8px}.row label{flex:1}
+button{width:100%;padding:12px;border:0;border-radius:10px;background:var(--fg);color:var(--bg);font-size:15px;font-weight:600}
+.tip{font-size:12px;opacity:.7;line-height:1.5;margin-top:8px}
+</style></head><body><div class="wrap">
+<h1>Photo Booth</h1>
+<canvas id="c" width="600" height="1540"></canvas>
+<div class="card">
+<label>방향<select id="ori"><option value="v">세로 (4컷이 위에서 아래로)</option><option value="h">가로 (2×2: 위 2장, 아래 2장)</option></select></label>
+<label>프레임 이미지 (투명 PNG, 사진 칸은 뚫려 있어야 해요)<input type="file" id="fri" accept="image/*"></label>
+<label>배경 이미지 (네 칸 모두의 뒤에 깔려요)<input type="file" id="bgi" accept="image/*"></label>
+<div class="row"><label>프레임색<input type="color" id="fc" value="#ffd1e6" style="height:40px"></label><label>칸 배경색<input type="color" id="bc" value="#f3eaff" style="height:40px"></label></div>
+<div class="row"><label>로고 글자<input type="text" id="lg" value="LIFE 4 CUTS"></label><label>날짜<input type="text" id="dt" value="2026.10.30"></label></div>
+<div id="lay"></div>
+<button id="mk">사진(PNG)으로 저장</button>
+<div class="tip">프레임 이미지를 넣으면 색 프레임 대신 그 이미지가 맨 위에 덮여요. 세로는 600×1540, 가로(2×2)는 1100×900 비율로 만들어야 딱 맞아요. 사진이 4장보다 적으면 앞 사진으로 채워져요. 글자를 비우면 안 나와요. 체크무늬 부분이 투명이에요.</div>
+</div></div>
+<script>
+var $=function(i){return document.getElementById(i)},cv=$("c"),g=cv.getContext("2d"),ims=[null,null,null,null],bgImg=null,frImg=null;
+function dims(){return $("ori").value==="v"?{w:600,h:1540}:{w:1100,h:900}}
+function loadTo(id,cb){$(id).addEventListener("change",function(e){var f=e.target.files[0];if(!f)return;var im=new Image();im.onload=function(){cb(im);draw()};im.src=URL.createObjectURL(f)})}
+[0,1,2,3].forEach(function(i){
+  var d=document.createElement("div");d.className="card";
+  d.innerHTML='<b style="font-size:13px">'+(i+1)+'번째 컷 (그림)</b><input type="file" id="f'+i+'" accept="image/*" style="margin:6px 0 10px">'
+   +'<div class="row"><label>확대<input type="range" id="z'+i+'" min="1" max="3" step="0.1" value="1"></label><label>좌우<input type="range" id="x'+i+'" min="-300" max="300" value="0"></label><label>위아래<input type="range" id="y'+i+'" min="-300" max="300" value="130"></label></div>';
+  $("lay").appendChild(d);loadTo("f"+i,function(im){ims[i]=im});
+});
+loadTo("bgi",function(im){bgImg=im});loadTo("fri",function(im){frImg=im});
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
+function pick(i){if(ims[i])return ims[i];for(var j=i-1;j>=0;j--)if(ims[j])return ims[j];for(j=0;j<4;j++)if(ims[j])return ims[j];return null}
+function cover(c,im,x,y,w,h,z,ox,oy){var r=Math.max(w/im.width,h/im.height)*z,iw=im.width*r,ih=im.height*r;c.drawImage(im,x+w/2-iw/2+ox,y+h/2-ih/2+oy,iw,ih)}
+function scene(c){
+  var v=$("ori").value==="v",d=dims(),FF="-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif";
+  if(!frImg){rr(c,20,20,d.w-40,d.h-40,28);c.fillStyle=$("fc").value;c.fill();c.strokeStyle="rgba(0,0,0,.12)";c.lineWidth=3;c.stroke()}
+  [0,1,2,3].forEach(function(k){
+    var x=v?60:62+(k%2)*496,y=v?70+k*336:50+Math.floor(k/2)*336,w=480,h=320;
+    c.save();rr(c,x,y,w,h,16);c.clip();c.fillStyle=$("bc").value;c.fillRect(x,y,w,h);
+    if(bgImg)cover(c,bgImg,x,y,w,h,1,0,0);
+    var im=pick(k);if(im)cover(c,im,x,y,w,h,+$("z"+k).value,+$("x"+k).value,+$("y"+k).value);
+    c.restore();
+  });
+  if(frImg)c.drawImage(frImg,0,0,d.w,d.h);
+  var lx=v?300:550,ly=v?1448:770,dy=v?1492:820;
+  c.textAlign="center";c.textBaseline="middle";c.fillStyle="rgba(0,0,0,.72)";c.font="700 46px "+FF;c.fillText($("lg").value,lx,ly);
+  c.globalAlpha=.6;c.font="500 26px "+FF;c.fillText($("dt").value,lx,dy);c.globalAlpha=1;
+}
+function draw(){var d=dims();if(cv.width!==d.w||cv.height!==d.h){cv.width=d.w;cv.height=d.h}g.clearRect(0,0,d.w,d.h);scene(g)}
+$("ori").addEventListener("change",function(){var v=this.value==="v";[0,1,2,3].forEach(function(i){$("y"+i).value=130});draw()});
+document.addEventListener("input",draw);
+$("mk").addEventListener("click",function(){var S=2,d=dims(),oc=document.createElement("canvas");oc.width=d.w*S;oc.height=d.h*S;var og=oc.getContext("2d");og.scale(S,S);scene(og);
+  oc.toBlob(function(b){var a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="photobooth.png";document.body.appendChild(a);a.click();a.remove()},"image/png")});
+draw();
+</script></body></html>
